@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import subprocess
 from scipy.misc import imread,imresize
 import pandas as pd
 
@@ -8,34 +9,11 @@ def fetch_lfw_dataset(attrs_name = "lfw_attributes.txt",
                       raw_images_name = "lfw",
                       use_raw=False,
                       dx=80,dy=80,
-                      dimx=45,dimy=45
-    ):#sad smile
-
-    #download if not exists
-    if (not use_raw) and not os.path.exists(images_name):
-        print("images not found, donwloading...")
-        os.system("wget http://vis-www.cs.umass.edu/lfw/lfw-deepfunneled.tgz -O tmp.tgz")
-        print("extracting...")
-        os.system("tar xvzf tmp.tgz && rm tmp.tgz")
-        print("done")
-        assert os.path.exists(images_name)
-    
-    if use_raw and not os.path.exists(raw_images_name):
-        print("images not found, donwloading...")
-        os.system("wget http://vis-www.cs.umass.edu/lfw/lfw.tgz -O tmp.tgz")
-        print("extracting...")
-        os.system("tar xvzf tmp.tgz && rm tmp.tgz")
-        print("done")
-        assert os.path.exists(raw_images_name)
-
-    if not os.path.exists(attrs_name):
-        print("attributes not found, downloading...")
-        os.system("wget http://www.cs.columbia.edu/CAVE/databases/pubfig/download/%s"%attrs_name)
-        print("done")
+                      dimx=45,dimy=45):
 
     # read attrs
     # the header row begins with a #, which we want to ignore
-    with open("lfw_attributes.txt") as attributes_file:
+    with open(attrs_name) as attributes_file:
         attributes_file.readline()
         ugly_header = attributes_file.read(2)
         assert ugly_header == "#\t"
@@ -44,19 +22,22 @@ def fetch_lfw_dataset(attrs_name = "lfw_attributes.txt",
     #read photos
     dirname = raw_images_name if use_raw else images_name
     photo_ids = []
+    initial_depth = dirname.count(os.sep)
     for dirpath, dirnames, filenames in os.walk(dirname):
+        if dirpath.count(os.sep) - initial_depth > 1:
+            continue
         for fname in filenames:
             if fname.endswith(".jpg"):
-                fpath = os.path.join(dirpath,fname)
                 photo_id = fname[:-4].replace('_',' ').split()
                 person_id = ' '.join(photo_id[:-1])
                 photo_number = int(photo_id[-1])
+                fpath = os.path.join(dirpath, fname)
                 photo_ids.append({'person':person_id,'imagenum':photo_number,'photo_path':fpath})
 
     photo_ids = pd.DataFrame(photo_ids)
 
-    #mass-merge
-    #(photos now have same order as attributes)
+    # mass-merge
+    # (photos now have same order as attributes)
     df = pd.merge(df_attrs,photo_ids,on=('person','imagenum'))
 
     assert len(df)==len(df_attrs),"lost some data when merging dataframes"
@@ -67,7 +48,7 @@ def fetch_lfw_dataset(attrs_name = "lfw_attributes.txt",
                                 .apply(lambda img: imresize(img,[dimx,dimy]))
 
     all_photos = np.stack(all_photos.values).astype('uint8')
-    all_attrs = df.drop(["photo_path","person","imagenum"],axis=1)
+    all_attrs = df.drop(["photo_path","person","imagenum"], axis=1)
     
-    return all_photos,all_attrs
+    return all_photos, all_attrs
     
